@@ -73,38 +73,72 @@ g_Courseplay = {
 
 local logger = Logger('main', Logger.level.debug)
 local parameters = {}
--- working width of the equipment
-local workingWidth = AdjustableParameter(5, 'width', 'W', 'w', 0.1, 0, 100)
+
+-- NOTE(erik): All field boundary settings seems to not really do anything,
+-- I can not see any difference when changing these values. Investigate further...
+
+-- 3.582m is the working with of the väderstad cultivator for Drever
+local workingWidth = AdjustableParameter(3.58, 'width', 'W', 'w', 0.1, 0, 100)
 table.insert(parameters, workingWidth)
-local turningRadius = AdjustableParameter(3, 'radius', 'T', 't', 0.1, 0, 20)
+
+-- 2.6m is 45 degrees steering angle for Drever, which is the maximum steering angle
+local turningRadius = AdjustableParameter(3.5, 'radius', 'T', 't', 0.1, 0, 20)
 table.insert(parameters, turningRadius)
+
+-- Margin around outer most perimiter of the field
+-- NOTE(erik): I dont see any difference when changing this value.
 local fieldMargin = AdjustableParameter(0, 'margin', 'N', 'n', 0.1, -5, 5)
 table.insert(parameters, fieldMargin)
+
 -- number of headland passes around the field boundary
-local nHeadlandPasses = AdjustableParameter(1, 'headlands', 'P', 'p', 1, 0, 100)
+local nHeadlandPasses = AdjustableParameter(3, 'headlands', 'P', 'p', 1, 0, 100)
 table.insert(parameters, nHeadlandPasses)
-local nHeadlandsWithRoundCorners = AdjustableParameter(0, 'headlands with round corners', 'R', 'r', 1, 0, 100)
+
+-- make all hedlands have round corners
+-- use the same turning radius for the headland corners as the vehicle turning radius,
+-- this is easier when Drever is not allowed to reverse direction, which means that we
+-- will not be able to make a maneuver to preserve sharp corners
+local nHeadlandsWithRoundCorners = AdjustableParameter(nHeadlandPasses.value, 'headlands with round corners', 'R', 'r', 1, 0, 100)
 table.insert(parameters, nHeadlandsWithRoundCorners)
+
 local headlandClockwise = ToggleParameter('headlands clockwise', true, 'c')
 table.insert(parameters, headlandClockwise)
-local headlandFirst = ToggleParameter('headlands first', true, 'h')
+
+-- the first demo task for Drever is to cultivate (harva) the feald, and for that operation
+-- you want to do the mainlands first, which creates wheel tracks in the soil when making turns
+-- on the headland. So we do the final pass around the headland after the mainlands are done, to
+-- erase and smooth out the wheel tracks.
+local headlandFirst = ToggleParameter('headlands first', false, 'h')
 table.insert(parameters, headlandFirst)
+
+-- Percentage overlap of the working width, to make sure we don't leave any unworked soil on the headland.
 local headlandOverlap = AdjustableParameter(5, 'headland overlap', 'Q', 'q', 1, 0, 100)
 table.insert(parameters, headlandOverlap)
-local fieldCornerRadius = AdjustableParameter(0, 'field corner radius', 'F', 'f', 1, 0, 30)
+
+-- NOTE(erik): I can not figure out what this does, I thought it would make the field boundary smooth but I
+-- dont see any difference when changing this value.
+local fieldCornerRadius = AdjustableParameter(turningRadius.value, 'field corner radius', 'F', 'f', 1, 0, 30)
 table.insert(parameters, fieldCornerRadius)
+
+-- NOTE(erik): Not sure what this does, does not notice a difference when changing this value.
 local sharpenCorners = ToggleParameter('sharpen corners', true, 's')
 table.insert(parameters, sharpenCorners)
+
 local bypassIslands = ToggleParameter('island bypass', true, 'b')
 table.insert(parameters, bypassIslands)
-local nIslandHeadlandPasses = AdjustableParameter(2, 'island headlands', 'I', 'i', 1, 1, 10)
+
+local nIslandHeadlandPasses = AdjustableParameter(nHeadlandPasses.value, 'island headlands', 'I', 'i', 1, 1, 10)
 table.insert(parameters, nIslandHeadlandPasses)
+
 local islandHeadlandClockwise = ToggleParameter('island headlands clockwise', false, 'C')
 table.insert(parameters, islandHeadlandClockwise)
+
 local autoRowAngle = ToggleParameter('auto row angle', true, '6')
 table.insert(parameters, autoRowAngle)
+
 local rowAngleDeg = AdjustableParameter(0, 'row angle', 'A', 'a', 10, -90, 90)
 table.insert(parameters, rowAngleDeg)
+
 local rowPattern = ListParameter(CourseGenerator.RowPattern.ALTERNATING, 'row pattern', 'O', 'o',
         { CourseGenerator.RowPattern.ALTERNATING,
           CourseGenerator.RowPattern.SKIP,
@@ -120,30 +154,43 @@ local rowPattern = ListParameter(CourseGenerator.RowPattern.ALTERNATING, 'row pa
             'racetrack'
         })
 table.insert(parameters, rowPattern)
+
 local nRows = AdjustableParameter(1, 'rows to skip/rows per land', 'K', 'k', 1, 0, 10)
 table.insert(parameters, nRows)
+
 local leaveSkippedRowsUnworked = ToggleParameter('skipped rows unworked', false, 'u')
 table.insert(parameters, leaveSkippedRowsUnworked)
+
 local centerClockwise = ToggleParameter('spiral/lands clockwise', true, 'l')
 table.insert(parameters, centerClockwise)
+
 local spiralFromInside = ToggleParameter('spiral from inside', true, 'L')
 table.insert(parameters, spiralFromInside)
+
 local evenRowDistribution = ToggleParameter('even row width', true, 'e')
 table.insert(parameters, evenRowDistribution)
+
 local useBaselineEdge = ToggleParameter('use base line edge', false, 'g')
 table.insert(parameters, useBaselineEdge)
+
 local showDebugInfo = ToggleParameter('show debug info', false, 'd', true)
 table.insert(parameters, showDebugInfo)
+
 local twoSided = ToggleParameter('two sided', false, '2')
 table.insert(parameters, twoSided)
+
 local showSwath = ToggleParameter('show swath', false, '1', true)
 table.insert(parameters, showSwath)
+
 local reverseCourse = ToggleParameter('reverse', false, 'v', true)
 table.insert(parameters, reverseCourse)
+
 local smallOverlaps = ToggleParameter('small overlaps', false, 'm', true)
 table.insert(parameters, smallOverlaps)
+
 local nVehicles = AdjustableParameter(1, 'number of vehicles', 'Y', 'y', 1, 1, 5)
 table.insert(parameters, nVehicles)
+
 local useSameTurnWidth = ToggleParameter('use same turn width', false, 'u')
 table.insert(parameters, useSameTurnWidth)
 
@@ -221,7 +268,7 @@ function TestConstraints:init()
     self.penalty = 10
 end
 
-local function doSomePathfinder(vs, vg)
+local function doSomePathfinder(vs, vg, context)
     local start = vs:getEntryEdge():getEndAsState3D()
     local goal = vg:getExitEdge():getBaseAsState3D()
     local yieldAfter = 20
@@ -236,24 +283,23 @@ local function doSomePathfinder(vs, vg)
     end
 end
 
-local function applyPathfinder(p)
+local function applyPathfinder(p, context)
     debugTurnPaths = {}
     if #p > 1 then
         for i, v, vp, vn in p:vertices() do
             if v:getExitEdge() then
                 if v:getAttributes():shouldUsePathfinderToNextWaypoint() then
-                    -- usePathfinder
-                    doSomePathfinder(v, vn)
+                    logger:debug("EXIT edge should use path finder to NEXT waypoint")
+                    -- doSomePathfinder(v, vn, context)
                 elseif v:getAttributes():isRowEnd() then
-                    -- turn
-                    doSomePathfinder(v, vn)
+                    logger:debug("EXIT edge is ROW END")
+                    -- doSomePathfinder(v, vn, context)
                 end
-                -- love.graphics.line(v.x, v.y, v:getExitEdge():getEnd().x, v:getExitEdge():getEnd().y)
             end
             if v:getEntryEdge() and v:getAttributes():shouldUsePathfinderToThisWaypoint() then
                 -- love.graphics.line(v.x, v.y, v:getEntryEdge():getBase().x, v:getEntryEdge():getBase().y)
-                print("use pathfinder")
-                doSomePathfinder(vp, v)
+                logger:debug("ENTRY ENGE should use path finder to THIS waypoint")
+                -- doSomePathfinder(vp, v, context)
             end
         end
     end

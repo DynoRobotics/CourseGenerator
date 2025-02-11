@@ -1,4 +1,28 @@
-# Fieldwork Course Generator
+# Dyno Fork of Course Generator
+
+The [Courseplay_FS25](https://github.com/Courseplay/Courseplay_FS25) contains the FarmingSimulator mod for autonomous farming vehicles. It contains both the coverage planner, ai controllers for the vehicles and GUI-stuff for the FarmingSimulator game interface.
+
+The original [CourseGenerator](https://github.com/Courseplay/CourseGenerator) repository is a wrapper around the previously mentioned Courseplay_FS25 mod, that the developers use to develop, iterate and debug the algorithms without having to run them inside of the FarmingSimulator game. Instead, they vizualise the planned path using the Lua graphics library [Löve](https://love2d.org/).
+
+To work with the Löve wrapper, the Courseplay_FS25 repo needs to be cloned into the root of the CourseGenerator repo, it should also be renamed to "FS25_Courseplay".
+
+``
+git clone git@github.com:Courseplay/Courseplay_FS25.git FS25_Courseplay
+```
+
+My idea now is to fork the CourseGenerator wrapper and modify it to suite our use case, hopefully it will not be neccissary to make changes to Courseplay_FS25...
+
+## Tips
+
+Enable project search of the gitignored directory FS25_Courseplay do `CTRL+,` and "Search: Use Ignore Files" and un-tick that option.
+
+Install Lua debugger for breakpoints and inspection: tomblind.local-lua-debugger-vscode
+
+Install Lua language server: sumneko.lua
+
+Start Löve viewer: `love . fields/Goliszew.xml 13`
+
+# Original README from upstream repo
 
 The Fieldwork Course Generator is a route planner for farming equipment 
 like tractors or harvesters to perform their fieldwork efficiently.

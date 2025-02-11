@@ -14,7 +14,7 @@
             },
             "args": 
             [
-                ".", "fields/Goliszew.xml", "41",
+                ".", "fields/Goliszew.xml", "13",
                 // "./pathfinder",
             ],
             "cwd": "${workspaceFolder}",
