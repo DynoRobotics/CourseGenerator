@@ -353,11 +353,11 @@ function love.mousepressed(x, y, button, istouch)
             done, path, goalNodeInvalid = find(startPosition, goalPosition, love.keyboard.isDown('lctrl'))
 
             if path then
-                debug('Path found with %d nodes', #path)
+                print('Path found with %d nodes', #path)
             elseif done then
-                debug('No path found')
+                print('No path found')
                 if goalNodeInvalid then
-                    debug('Goal node invalid')
+                    print('Goal node invalid')
                 end
             end
         elseif love.keyboard.isDown('lalt') then

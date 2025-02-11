@@ -9,7 +9,67 @@
 -- the boundaries of all owned fields of the current map, including selectedField islands.
 --
 --
-dofile('include.lua')
+
+if os.getenv "LOCAL_LUA_DEBUGGER_VSCODE" == "1" then
+    local lldebugger = require "lldebugger"
+    lldebugger.start()
+    local run = love.run
+    function love.run(...)
+        local f = lldebugger.call(run, false, ...)
+        return function(...) return lldebugger.call(f, false, ...) end
+    end
+end
+
+dofile( 'include.lua' )
+require('mocks.mock-GiantsEngine')
+require('mocks.mock-Node')
+require('mocks.mock-DebugUtil')
+require('mocks.mock-Courseplay')
+require('CpUtil')
+require('BinaryHeap')
+require('ReedsShepp')
+require('ReedsSheppSolver')
+require('Waypoint')
+require('Course')
+require('ai.util.AIUtil')
+
+function openIntervalTimer()
+end
+
+function readIntervalTimerMs(timer)
+    return 0
+end
+
+function closeIntervalTimer(timer)
+end
+
+function printCallstack()
+    print(debug.traceback())
+end
+
+require('HybridAStar')
+require('AStar')
+require('HybridAStarWithAStarInTheMiddle')
+require('PathfinderConstraints')
+
+g_Courseplay = {
+    globalSettings = {
+        getSettings = function()
+            return {
+                deltaAngleRelaxFactorDeg = {
+                    getValue = function()
+                        return 10
+                    end
+                },
+                maxDeltaAngleAtGoalDeg = {
+                    getValue = function()
+                        return 45
+                    end
+                },
+            }
+        end
+    }
+}
 
 local logger = Logger('main', Logger.level.debug)
 local parameters = {}
@@ -150,6 +210,55 @@ local savedFields
 local currentVertices
 local errors = {}
 local context
+
+local debugTurnPaths = {}
+
+---@class TestConstraints : PathfinderConstraintInterface
+local TestConstraints = CpObject(PathfinderConstraintInterface)
+function TestConstraints:init()
+    self.boxes = {
+    }
+    self.penalty = 10
+end
+
+local function doSomePathfinder(vs, vg)
+    local start = vs:getEntryEdge():getEndAsState3D()
+    local goal = vg:getExitEdge():getBaseAsState3D()
+    local yieldAfter = 20
+    local turnRadius = 3
+    local allowReverse = false
+    local constraints = TestConstraints()
+    local pathfinder = HybridAStarWithAStarInTheMiddle({}, yieldAfter)
+    local result = pathfinder:start(start, goal, turnRadius, allowReverse, constraints)
+    local debugTurnPath = result.path
+    if result.done then
+        table.insert(debugTurnPaths, debugTurnPath)
+    end
+end
+
+local function applyPathfinder(p)
+    debugTurnPaths = {}
+    if #p > 1 then
+        for i, v, vp, vn in p:vertices() do
+            if v:getExitEdge() then
+                if v:getAttributes():shouldUsePathfinderToNextWaypoint() then
+                    -- usePathfinder
+                    doSomePathfinder(v, vn)
+                elseif v:getAttributes():isRowEnd() then
+                    -- turn
+                    doSomePathfinder(v, vn)
+                end
+                -- love.graphics.line(v.x, v.y, v:getExitEdge():getEnd().x, v:getExitEdge():getEnd().y)
+            end
+            if v:getEntryEdge() and v:getAttributes():shouldUsePathfinderToThisWaypoint() then
+                -- love.graphics.line(v.x, v.y, v:getEntryEdge():getBase().x, v:getEntryEdge():getBase().y)
+                print("use pathfinder")
+                doSomePathfinder(vp, v)
+            end
+        end
+    end
+end
+
 ------------------------------------------------------------------------------------------------------------------------
 --- Generate the fieldwork course
 ---------------------------------------------------------------------------------------------------------------------------
@@ -227,6 +336,13 @@ local function generate()
         print(love.profiler.report(40))
         love.profiler.reset()
         love.profiler.stop()
+    end
+    if nVehicles:get() > 1 then
+        -- for _, pos, path in course:pathIterator() do
+        -- end
+    else
+        local path = course:getPath();
+        applyPathfinder(path, context)
     end
     -- export the first headland as CSV
     local exporter = Exporter(course)
@@ -641,6 +757,20 @@ local function drawStartLocation()
     love.graphics.pop()
 end
 
+local function drawDebugTurnPaths()
+    for _, debugTurnPath in ipairs(debugTurnPaths) do
+        love.graphics.setLineWidth(lineWidth)
+        love.graphics.setColor({1, 0, 0, 1.0})
+        for i = 1, #debugTurnPath - 1 do
+            local v = debugTurnPath[i]
+            local vn = debugTurnPath[i + 1]
+            if vn then
+                love.graphics.line(v.x, v.y, vn.x, vn.y)
+            end
+        end
+    end
+end
+
 local function drawGraphics()
     love.graphics.replaceTransform(graphicsTransform)
     love.graphics.setPointSize(pointSize)
@@ -663,6 +793,7 @@ local function drawGraphics()
         drawSwath(course:getPath())
     end
     drawStartLocation()
+    drawDebugTurnPaths()
 end
 
 local function drawContext()
