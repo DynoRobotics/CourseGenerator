@@ -260,46 +260,70 @@ local context
 
 local debugTurnPaths = {}
 
----@class TestConstraints : PathfinderConstraintInterface
-local TestConstraints = CpObject(PathfinderConstraintInterface)
-function TestConstraints:init()
-    self.boxes = {
-    }
-    self.penalty = 10
+
+---@class MyPathFinderConstraints : PathfinderConstraintInterface
+local MyPathFinderConstraints = CpObject(PathfinderConstraintInterface)
+function MyPathFinderConstraints:init(islands)
+    self.islands = islands
+    self.penalty = 1
 end
 
-local function doSomePathfinder(vs, vg, context)
+function MyPathFinderConstraints:isValidNode(node)
+    return true
+end
+
+function MyPathFinderConstraints:isValidAnalyticSolutionNode(node)
+    for _, b in ipairs(self.islands) do
+        if b:isInside(node.x, node.y) then
+            return false
+        end
+    end
+    return true
+end
+
+function MyPathFinderConstraints:getNodePenalty(node)
+    for _, b in ipairs(self.islands) do
+        if b:isInside(node.x, node.y) then
+            return self.penalty
+        end
+    end
+    return 0
+end
+
+local function doSomePathfinder(vs, vg, islands)
     local start = vs:getEntryEdge():getEndAsState3D()
     local goal = vg:getExitEdge():getBaseAsState3D()
-    local yieldAfter = 20
+    local yieldAfter = 1000
     local turnRadius = 3
     local allowReverse = false
-    local constraints = TestConstraints()
+    local constraints = MyPathFinderConstraints(islands)
     local pathfinder = HybridAStarWithAStarInTheMiddle({}, yieldAfter)
     local result = pathfinder:start(start, goal, turnRadius, allowReverse, constraints)
     local debugTurnPath = result.path
     if result.done then
         table.insert(debugTurnPaths, debugTurnPath)
+    else
+        print("PATHFINDER FAILED")
     end
 end
 
-local function applyPathfinder(p, context)
+local function applyPathfinder(p, islands)
     debugTurnPaths = {}
     if #p > 1 then
         for i, v, vp, vn in p:vertices() do
             if v:getExitEdge() then
                 if v:getAttributes():shouldUsePathfinderToNextWaypoint() then
                     logger:debug("EXIT edge should use path finder to NEXT waypoint")
-                    -- doSomePathfinder(v, vn, context)
+                    doSomePathfinder(v, vn, islands)
                 elseif v:getAttributes():isRowEnd() then
                     logger:debug("EXIT edge is ROW END")
-                    -- doSomePathfinder(v, vn, context)
+                    doSomePathfinder(v, vn, islands)
                 end
             end
             if v:getEntryEdge() and v:getAttributes():shouldUsePathfinderToThisWaypoint() then
                 -- love.graphics.line(v.x, v.y, v:getEntryEdge():getBase().x, v:getEntryEdge():getBase().y)
                 logger:debug("ENTRY ENGE should use path finder to THIS waypoint")
-                -- doSomePathfinder(vp, v, context)
+                -- doSomePathfinder(vp, v, islands)
             end
         end
     end
@@ -388,7 +412,12 @@ local function generate()
         -- end
     else
         local path = course:getPath();
-        applyPathfinder(path, context)
+        local islands = selectedField:getIslands()
+        local islandBoundaries = {}
+        for _, i in ipairs(islands) do
+            table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
+        end
+        applyPathfinder(path, islandBoundaries)
     end
     -- export the first headland as CSV
     local exporter = Exporter(course)
