@@ -20,3 +20,19 @@ function Exporter:exportHeadlandAsCsv(headlandNumber, filename)
     end
     file:close()
 end
+
+-- Export the generated course as a CSV file
+---@param filename string The filename to save the CSV file as, under the export/ directory
+function Exporter:exportCourseAsCsv(filename, debugTurnPaths)
+    local file = io.open('export/' .. filename, 'w')
+    for i, v in self.fieldworkCourse:getPath():vertices() do
+        -- check if i is a key in debugTurnPaths
+        file:write(string.format('%.2f,%.2f\n', v.x, v.y))
+        if debugTurnPaths[i] then
+            for _, vt in ipairs(debugTurnPaths[i]) do
+                file:write(string.format('%.2f,%.2f\n', vt.x, vt.y))
+            end
+        end
+    end
+    file:close()
+end

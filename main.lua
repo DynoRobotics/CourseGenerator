@@ -290,7 +290,7 @@ function MyPathFinderConstraints:getNodePenalty(node)
     return 0
 end
 
-local function doSomePathfinder(vs, vg, islands)
+local function doSomePathfinder(i, vs, vg, islands)
     local start = vs:getEntryEdge():getEndAsState3D()
     local goal = vg:getExitEdge():getBaseAsState3D()
     local yieldAfter = 1000
@@ -301,7 +301,7 @@ local function doSomePathfinder(vs, vg, islands)
     local result = pathfinder:start(start, goal, turnRadius, allowReverse, constraints)
     local debugTurnPath = result.path
     if result.done then
-        table.insert(debugTurnPaths, debugTurnPath)
+        debugTurnPaths[i] = debugTurnPath
     else
         print("PATHFINDER FAILED")
     end
@@ -314,16 +314,16 @@ local function applyPathfinder(p, islands)
             if v:getExitEdge() then
                 if v:getAttributes():shouldUsePathfinderToNextWaypoint() then
                     logger:debug("EXIT edge should use path finder to NEXT waypoint")
-                    doSomePathfinder(v, vn, islands)
+                    doSomePathfinder(i, v, vn, islands)
                 elseif v:getAttributes():isRowEnd() then
                     logger:debug("EXIT edge is ROW END")
-                    doSomePathfinder(v, vn, islands)
+                    doSomePathfinder(i, v, vn, islands)
                 end
             end
             if v:getEntryEdge() and v:getAttributes():shouldUsePathfinderToThisWaypoint() then
                 -- love.graphics.line(v.x, v.y, v:getEntryEdge():getBase().x, v:getEntryEdge():getBase().y)
                 logger:debug("ENTRY ENGE should use path finder to THIS waypoint")
-                -- doSomePathfinder(vp, v, islands)
+                -- doSomePathfinder(i, vp, v, islands)
             end
         end
     end
@@ -422,6 +422,7 @@ local function generate()
     -- export the first headland as CSV
     local exporter = Exporter(course)
     exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
+    exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
     -- make sure all logs are now visible
     io.stdout:flush()
     errors = context:getErrors()
@@ -833,7 +834,7 @@ local function drawStartLocation()
 end
 
 local function drawDebugTurnPaths()
-    for _, debugTurnPath in ipairs(debugTurnPaths) do
+    for k, debugTurnPath in pairs(debugTurnPaths) do
         love.graphics.setLineWidth(lineWidth)
         love.graphics.setColor({1, 0, 0, 1.0})
         for i = 1, #debugTurnPath - 1 do
