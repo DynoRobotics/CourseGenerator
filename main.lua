@@ -82,7 +82,7 @@ local workingWidth = AdjustableParameter(3.58, 'width', 'W', 'w', 0.1, 0, 100)
 table.insert(parameters, workingWidth)
 
 -- 2.6m is 45 degrees steering angle for Drever, which is the maximum steering angle
-local turningRadius = AdjustableParameter(3.5, 'radius', 'T', 't', 0.1, 0, 20)
+local turningRadius = AdjustableParameter(6.0, 'radius', 'T', 't', 0.1, 0, 20)
 table.insert(parameters, turningRadius)
 
 -- Margin around outer most perimiter of the field
@@ -91,7 +91,7 @@ local fieldMargin = AdjustableParameter(0, 'margin', 'N', 'n', 0.1, -5, 5)
 table.insert(parameters, fieldMargin)
 
 -- number of headland passes around the field boundary
-local nHeadlandPasses = AdjustableParameter(3, 'headlands', 'P', 'p', 1, 0, 100)
+local nHeadlandPasses = AdjustableParameter(5, 'headlands', 'P', 'p', 1, 0, 100)
 table.insert(parameters, nHeadlandPasses)
 
 -- make all hedlands have round corners
@@ -117,7 +117,7 @@ table.insert(parameters, headlandOverlap)
 
 -- NOTE(erik): I can not figure out what this does, I thought it would make the field boundary smooth but I
 -- dont see any difference when changing this value.
-local fieldCornerRadius = AdjustableParameter(turningRadius.value, 'field corner radius', 'F', 'f', 1, 0, 30)
+local fieldCornerRadius = AdjustableParameter(turningRadius:get(), 'field corner radius', 'F', 'f', 1, 0, 30)
 table.insert(parameters, fieldCornerRadius)
 
 -- NOTE(erik): Not sure what this does, does not notice a difference when changing this value.
@@ -294,11 +294,10 @@ local function doSomePathfinder(i, vs, vg, islands)
     local start = vs:getEntryEdge():getEndAsState3D()
     local goal = vg:getExitEdge():getBaseAsState3D()
     local yieldAfter = 1000
-    local turnRadius = 3
     local allowReverse = false
     local constraints = MyPathFinderConstraints(islands)
     local pathfinder = HybridAStarWithAStarInTheMiddle({}, yieldAfter)
-    local result = pathfinder:start(start, goal, turnRadius, allowReverse, constraints)
+    local result = pathfinder:start(start, goal, turningRadius:get(), allowReverse, constraints)
     local debugTurnPath = result.path
     if result.done then
         debugTurnPaths[i] = debugTurnPath
