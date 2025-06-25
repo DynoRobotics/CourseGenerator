@@ -422,6 +422,8 @@ local function generate()
     local exporter = Exporter(course)
     exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
     exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
+    exporter:exportCourseAndMetaDataAsCsv('courseAndMetaData.csv', debugTurnPaths)
+    exporter:exportCourseAndDoWorkMetaDataAsCsv('courseAndDoWorkMetaData.csv', debugTurnPaths)
     -- make sure all logs are now visible
     io.stdout:flush()
     errors = context:getErrors()
