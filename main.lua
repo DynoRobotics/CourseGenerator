@@ -423,7 +423,6 @@ local function generate()
     exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
     exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
     exporter:exportCourseAndMetaDataAsCsv('courseAndMetaData.csv', debugTurnPaths)
-    exporter:exportCourseAndDoWorkMetaDataAsCsv('courseAndDoWorkMetaData.csv', debugTurnPaths)
     -- make sure all logs are now visible
     io.stdout:flush()
     errors = context:getErrors()
@@ -567,6 +566,9 @@ local function drawWaypoint(v)
         love.graphics.setColor(rowStartColor)
     elseif v:getAttributes():isRowEnd() then
         love.graphics.setColor(rowEndColor)
+    end
+    if v:getAttributes():isOnConnectingPath() then
+        love.graphics.setColor({ 1.0, 1.0, 1.0 })
     end
     drawVertexAsArrow(v)
 end
