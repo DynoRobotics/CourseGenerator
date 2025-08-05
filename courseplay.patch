@@ -1,0 +1,28 @@
+diff --git a/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua b/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua
+index b79205ef..1266ab55 100644
+--- a/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua
++++ b/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua
+@@ -128,7 +128,7 @@ function HybridAStarWithAStarInTheMiddle:resume(...)
+             end
+             CourseGenerator.addDebugPolyline(Polyline(result.path), {1, 0, 0})
+             local lMiddlePath = HybridAStar.length(result.path)
+-            self:debug('Direct path is %d m', lMiddlePath)
++            self:debug('Direct path is %f m', lMiddlePath)
+             -- do we even need to use the normal A star or the nodes are close enough that the hybrid A star will be fast enough?
+             if lMiddlePath < self.hybridRange * 2 then
+                 return self:findHybridStartToEnd()
+diff --git a/scripts/pathfinder/State3D.lua b/scripts/pathfinder/State3D.lua
+index d604c9d2..97ae6f1b 100644
+--- a/scripts/pathfinder/State3D.lua
++++ b/scripts/pathfinder/State3D.lua
+@@ -207,8 +207,8 @@ function State3D:__tostring()
+         steer = 'Straight'
+     end
+     local gear = self.gear == Gear.Forward and 'Forward' or 'Backward'
+-    local tTrailer = self.tTrailer and string.format(' (%d)', math.deg(self.tTrailer)) or ''
+-    result = string.format('x: %.2f y:%.2f t:%d%s gear:%s steer:%s g:%.4f h:%.4f c:%.4f closed:%s open:%s',
++    local tTrailer = self.tTrailer and string.format(' (%.2f)', math.deg(self.tTrailer)) or ''
++    result = string.format('x: %.2f y:%.2f t:%.2f%s gear:%s steer:%s g:%.4f h:%.4f c:%.4f closed:%s open:%s',
+             self.x, self.y, math.deg(self.t), tTrailer, gear, steer,
+             self.g, self.h, self.cost, tostring(self.closed), tostring(self.onOpenList))
+     return result
