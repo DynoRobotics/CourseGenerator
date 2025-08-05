@@ -447,40 +447,49 @@ function love.load(arg)
     logger:debug('Reading %s...', fileName)
     savedFields = CourseGenerator.Field.loadSavedFields(fileName)
     selectedField = savedFields[tonumber(arg[2])]
-    local x1, y1, x2, y2 = selectedField:getBoundingBox()
-    local fieldWidth, fieldHeight = x2 - x1, y2 - y1
-    local xScale = windowWidth / fieldWidth
-    local yScale = windowHeight / fieldHeight
-    if xScale > yScale then
-        scale = 0.9 * yScale
-        pointSize = 0.9 * yScale
-    else
-        scale = 0.9 * xScale
-        pointSize = 0.9 * xScale
-    end
-    -- window is 80% of the screen size
-    windowWidth, windowHeight = love.window.getDesktopDimensions()
-    windowWidth, windowHeight = 0.8 * windowWidth, 0.8 * windowHeight
-    -- initially, start in the lower left corner
-    startX, startY = x1 + 10, y1 + 10
-    local fieldCenter = selectedField:getCenter()
-    -- world offset
-    --scale = 1
-    setOffset(fieldCenter.x, fieldCenter.y)
-    updateTransform()
-    statusTransform = love.math.newTransform(0, 0, 0, 1, 1, -windowWidth + 200, -windowHeight + 30)
-    mouseTransform = love.math.newTransform()
-    contextTransform = love.math.newTransform(10, 10, 0, 1, 1, 0, 0)
-    errorTransform = love.math.newTransform(300, 0, 0, 1, 1, 0, 0)
-    love.graphics.setPointSize(pointSize)
-    love.graphics.setLineWidth(lineWidth)
-    love.window.setMode(windowWidth, windowHeight, { highdpi = true })
-    love.window.setTitle(string.format('Course Generator - %s', selectedField:getId()))
 
-    startSign = love.graphics.newImage('FS25_Courseplay/img/signs/start.dds')
-    stopSign = love.graphics.newImage('FS25_Courseplay/img/signs/stop.dds')
+    if love.window then
+        local x1, y1, x2, y2 = selectedField:getBoundingBox()
+        local fieldWidth, fieldHeight = x2 - x1, y2 - y1
+        local xScale = windowWidth / fieldWidth
+        local yScale = windowHeight / fieldHeight
+        if xScale > yScale then
+            scale = 0.9 * yScale
+            pointSize = 0.9 * yScale
+        else
+            scale = 0.9 * xScale
+            pointSize = 0.9 * xScale
+        end
+        -- window is 80% of the screen size
+        windowWidth, windowHeight = love.window.getDesktopDimensions()
+        windowWidth, windowHeight = 0.8 * windowWidth, 0.8 * windowHeight
+        -- initially, start in the lower left corner
+        startX, startY = x1 + 10, y1 + 10
+        local fieldCenter = selectedField:getCenter()
+        -- world offset
+        --scale = 1
+        setOffset(fieldCenter.x, fieldCenter.y)
+        updateTransform()
+        statusTransform = love.math.newTransform(0, 0, 0, 1, 1, -windowWidth + 200, -windowHeight + 30)
+        mouseTransform = love.math.newTransform()
+        contextTransform = love.math.newTransform(10, 10, 0, 1, 1, 0, 0)
+        errorTransform = love.math.newTransform(300, 0, 0, 1, 1, 0, 0)
+
+        love.window.setMode(windowWidth, windowHeight, { highdpi = true })
+        love.window.setTitle(string.format('Course Generator - %s', selectedField:getId()))
+    end
+    if love.graphics then
+        love.graphics.setPointSize(pointSize)
+        love.graphics.setLineWidth(lineWidth)
+        startSign = love.graphics.newImage('FS25_Courseplay/img/signs/start.dds')
+        stopSign = love.graphics.newImage('FS25_Courseplay/img/signs/stop.dds')
+    end
 
     generate()
+
+    if not love.window then
+        os.exit(0)
+    end
 end
 
 local function screenToWorld(sx, sy)
@@ -960,6 +969,9 @@ local function drawDebugPolylines()
 end
 
 function love.draw()
+    if not love.window then
+        return
+    end
     drawGraphics()
     drawStatus()
     drawContext()

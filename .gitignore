@@ -1,3 +1,5 @@
 FS25_Courseplay
 *.log
 .idea
+export/*
+!export/.gitkeep
