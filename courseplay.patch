@@ -1,3 +1,25 @@
+diff --git a/scripts/pathfinder/Dubins.lua b/scripts/pathfinder/Dubins.lua
+index d72b4770..cf43f969 100644
+--- a/scripts/pathfinder/Dubins.lua
++++ b/scripts/pathfinder/Dubins.lua
+@@ -246,7 +246,7 @@ function dubins_RSL(ir)
+ end
+ 
+ function dubins_RLR(ir)
+-    local tmp0 = (6. - ir.d_sq + ir.two_c_ab + 2 * ir.d * (ir.sa - ir.sb)) / 8.
++    local tmp0 = (6. - ir.d_sq + ir.two_c_ab + 2 * ir.d * (ir.sa - ir.sb)) / 8.0
+     local phi  = atan2( ir.ca - ir.cb, ir.d - ir.sa + ir.sb )
+     if abs(tmp0) <= 1 then
+         local p = mod2pi(twoPi - acos(tmp0) )
+@@ -256,7 +256,7 @@ function dubins_RLR(ir)
+ end
+ 
+ function dubins_LRL(ir)
+-    local tmp0 = (6. - ir.d_sq + ir.two_c_ab + 2 * ir.d * (ir.sb - ir.sa)) / 8.
++    local tmp0 = (6. - ir.d_sq + ir.two_c_ab + 2 * ir.d * (ir.sb - ir.sa)) / 8.0
+     local phi = atan2( ir.ca - ir.cb, ir.d + ir.sa - ir.sb )
+     if abs(tmp0) <= 1 then
+         local p = mod2pi( twoPi - acos( tmp0) )
 diff --git a/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua b/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua
 index b79205ef..1266ab55 100644
 --- a/scripts/pathfinder/HybridAStarWithAStarInTheMiddle.lua
