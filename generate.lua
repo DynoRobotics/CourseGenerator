@@ -1,17 +1,59 @@
 
 -- Only generate path without love
 
-package.path = package.path .. ";FS25_Courseplay/scripts/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/util/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/test/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/pathfinder/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/geometry/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Geometry/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/geometry/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Genetic/?.lua"
-package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/genetic/?.lua"
-dofile('FS25_Courseplay/scripts/courseGenerator/test/require.lua')
+-- package.path = package.path .. ";FS25_Courseplay/scripts/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/util/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/test/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/pathfinder/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/geometry/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Geometry/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/geometry/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Genetic/?.lua"
+-- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/genetic/?.lua"
+
+-- dofile('FS25_Courseplay/scripts/courseGenerator/test/require.lua')
+require('CpObject')
+require('Logger')
+require('CourseGenerator')
+require('Util')
+require('CacheMap')
+require('WrapAroundIndex')
+require('CpMathUtil')
+require('Dubins')
+require('AnalyticSolution')
+require('Vector')
+require('State3D')
+require('Vertex')
+require('WaypointAttributes')
+require('LineSegment')
+require('Polyline')
+require('Polygon')
+require('Intersection')
+require('Slider')
+require('Field')
+require('FieldworkContext')
+require('FieldworkCourse')
+require('FieldworkCourseMultiVehicle')
+require('FieldworkCourseHelper')
+require('FieldworkCourseTwoSided')
+require('HeadlandConnector')
+require('Offset')
+require('Row')
+require('RowPattern')
+require('Block')
+require('Headland')
+require('CurvedPathHelper')
+require('Center')
+require('CenterTwoSided')
+require('Island')
+require('SplineHelper')
+require('AnalyticHelper')
+require('Genetic')
+require('BlockSequencer')
+require('mock-Courseplay')
+--------------------------------
+
 require('AdjustableParameter')
 require('ToggleParameter')
 require('ListParameter')
@@ -141,10 +183,38 @@ end
 --- Generate the fieldwork course
 ---------------------------------------------------------------------------------------------------------------------------
 
-function generate(fileName, fieldIndex, workingWidth, nHeadlandPasses, headlandFirst, headlandOverlap)
+function makeFieldFromGeometry(fieldXY, logger)
+    local field = CourseGenerator.Field("TemporaryField", 1)
+
+    -- boundary
+    for i, p in ipairs(fieldXY.boundary) do
+        local x, z = p[1], p[2]
+        field.boundary:append(Vertex(x, -z))
+    end
+
+    -- islands
+    field.islandPoints = {}
+    for _, obstacle in ipairs(fieldXY.obstacles) do
+        for i, p in ipairs(obstacle) do
+            local x, z = p[1], p[2]
+            table.insert(field.islandPoints, Vertex(x, -z))
+        end
+    end
+
+    field.boundary:splitEdges(CourseGenerator.cMaxEdgeLength)
+    field.boundary:calculateProperties()
+    field:setupIslands()
+
+    return field
+end
+
+function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlandOverlap, fieldMargin)
+
+    local logger = Logger('generate', Logger.level.debug)
+
+    local field = makeFieldFromGeometry(fieldXY, logger)
 
     local turningRadius = 6.0
-    local fieldMargin = 0.0
     local nHeadlandsWithRoundCorners = nHeadlandPasses
     local headlandClockwise = true
     local fieldCornerRadius = turningRadius
@@ -163,19 +233,13 @@ function generate(fileName, fieldIndex, workingWidth, nHeadlandPasses, headlandF
     local useBaselineEdge = false
     local smallOverlaps = false
 
-    local logger = Logger('generate', Logger.level.debug)
-
-    logger:debug('Reading %s...', fileName)
-    local savedFields = CourseGenerator.Field.loadSavedFields(fileName)
-    local selectedField = savedFields[fieldIndex]
-
-    local x1, y1, x2, y2 = selectedField:getBoundingBox()
+    local x1, y1, x2, y2 = field:getBoundingBox()
     -- initially, start in the lower left corner
     local startX, startY = x1 + 10, y1 + 10
     local baselineX, baselineY = startX, startY
 
     CourseGenerator.clearDebugObjects()
-    local context = CourseGenerator.FieldworkContext(selectedField, workingWidth, turningRadius, nHeadlandPasses)
+    local context = CourseGenerator.FieldworkContext(field, workingWidth, turningRadius, nHeadlandPasses)
                 :setHeadlandsWithRoundCorners(nHeadlandsWithRoundCorners)
                 :setHeadlandClockwise(headlandClockwise)
                 :setIslandHeadlandClockwise(islandHeadlandClockwise)
@@ -226,35 +290,62 @@ function generate(fileName, fieldIndex, workingWidth, nHeadlandPasses, headlandF
     end
 
     local path = course:getPath();
-    local islands = selectedField:getIslands()
+    local islands = field:getIslands()
     local islandBoundaries = {}
     for _, i in ipairs(islands) do
         table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
     end
     applyPathfinder(logger, path, islandBoundaries, turningRadius)
 
-    -- export the first headland as CSV
-    local exporter = Exporter(course)
-    exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
-    exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
-    exporter:exportCourseAndMetaDataAsCsv('courseAndMetaData.csv', debugTurnPaths)
+    -- Export the course
+    output = {}
+
+    doWork = false
+    areaType = "UNKNOWN"
+    for i, v in course:getPath():vertices() do
+
+        if v:getAttributes():isRowStart() then
+            doWork = true
+            areaType = "ROW"
+        end
+
+        if v:getAttributes():getHeadlandPassNumber() then
+            doWork = true
+            areaType = "HEADLAND"
+        end
+
+        if v:getAttributes():isOnConnectingPath() then
+            doWork = false
+            areaType = "CONNECTING_PATH"
+        end
+
+        if debugTurnPaths[i] then
+            doWork = false
+            areaType = "ROW_TURN"
+        end
+
+        startNewSegment = #output == 0 or output[#output].doWork ~= doWork or output[#output].areaType ~= areaType
+
+        if startNewSegment then
+            output[1] = {
+                doWork = doWork,
+                areaType = areaType,
+                points = {}
+            }
+        end
+
+        table.insert(output[#output].points, {x = v.x, y = v.y})
+
+        if debugTurnPaths[i] then
+            for _, vt in ipairs(debugTurnPaths[i]) do
+                table.insert(output[#output].points, {x = vt.x, y = vt.y})
+            end
+        end
+    end
 
     -- make sure all logs are now visible
     io.stdout:flush()
     errors = context:getErrors()
-
-    local output = {
-        segments = {
-            {
-                work = false,
-                type = "FUJA",
-                points = {
-                    { x = startX, y = startY, z = 0 },
-                    { x = baselineX, y = baselineY, z = 0 },
-                },
-            }
-        },
-    };
 
     return output, errors
 end
