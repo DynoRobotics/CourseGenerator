@@ -300,38 +300,41 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     -- Export the course
     output = {}
 
-    doWork = false
-    areaType = "UNKNOWN"
+    segmentWork = false
+    segmentType = "UNKNOWN"
     for i, v in course:getPath():vertices() do
 
         if v:getAttributes():isRowStart() then
-            doWork = true
-            areaType = "ROW"
+            segmentWork = true
+            segmentType = "ROW"
         end
 
         if v:getAttributes():getHeadlandPassNumber() then
-            doWork = true
-            areaType = "HEADLAND"
+            segmentWork = true
+            segmentType = "HEADLAND"
         end
 
         if v:getAttributes():isOnConnectingPath() then
-            doWork = false
-            areaType = "CONNECTING_PATH"
+            segmentWork = false
+            segmentType = "CONNECTING_PATH"
         end
 
         if debugTurnPaths[i] then
-            doWork = false
-            areaType = "ROW_TURN"
+            segmentWork = false
+            segmentType = "ROW_TURN"
         end
 
-        startNewSegment = #output == 0 or output[#output].doWork ~= doWork or output[#output].areaType ~= areaType
+        shouldCreateNewSegment = 
+            #output == 0 or
+            output[#output].work ~= segmentWork or
+            output[#output].type ~= segmentType
 
-        if startNewSegment then
-            output[1] = {
-                doWork = doWork,
-                areaType = areaType,
+        if shouldCreateNewSegment then
+            table.insert(output,{
+                work = segmentWork,
+                type = segmentType,
                 points = {}
-            }
+            })
         end
 
         table.insert(output[#output].points, {x = v.x, y = v.y})
