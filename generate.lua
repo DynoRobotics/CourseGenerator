@@ -208,13 +208,13 @@ function makeFieldFromGeometry(fieldXY, logger)
     return field
 end
 
-function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlandOverlap, fieldMargin)
+function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlandOverlap, fieldMargin, turningRadius, rowPattern, nRows)
 
     local logger = Logger('generate', Logger.level.debug)
 
     local field = makeFieldFromGeometry(fieldXY, logger)
 
-    local turningRadius = 6.0
+    local turningRadius = turningRadius or 6.0
     local nHeadlandsWithRoundCorners = nHeadlandPasses
     local headlandClockwise = true
     local fieldCornerRadius = turningRadius
@@ -224,8 +224,8 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     local islandHeadlandClockwise = false
     local autoRowAngle = true
     local rowAngleDeg = 0
-    local rowPattern = CourseGenerator.RowPattern.ALTERNATING
-    local nRows = 1
+    local rowPattern = rowPattern or CourseGenerator.RowPattern.ALTERNATING
+    local nRows = nRows or 1
     local leaveSkippedRowsUnworked = false
     local centerClockwise = true
     local spiralFromInside = true
