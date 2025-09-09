@@ -1,4 +1,3 @@
-
 -- Only generate path without love
 
 -- package.path = package.path .. ";FS25_Courseplay/scripts/?.lua"
@@ -208,7 +207,20 @@ function makeFieldFromGeometry(fieldXY, logger)
     return field
 end
 
-function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlandOverlap, fieldMargin, turningRadius, rowPattern, nRows)
+function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlandOverlap, fieldMargin, turningRadius,
+                  rowPattern, nRows, autoRowAngle, rowAngleDeg)
+
+    if rowPattern == 'alternating' then
+        rowPattern = CourseGenerator.RowPattern.ALTERNATING
+    elseif rowPattern == 'lands' then
+        rowPattern = CourseGenerator.RowPattern.LANDS
+    elseif rowPattern == 'racetrack' then
+        rowPattern = CourseGenerator.RowPattern.RACETRACK
+    elseif rowPattern == 'spiral' then
+        rowPattern = CourseGenerator.RowPattern.SPIRAL
+    elseif rowPattern == 'skip' then
+        rowPattern = CourseGenerator.RowPattern.SKIP
+    end
 
     local logger = Logger('generate', Logger.level.debug)
 
@@ -222,8 +234,8 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     local bypassIslands = true
     local nIslandHeadlandPasses = nHeadlandPasses
     local islandHeadlandClockwise = false
-    local autoRowAngle = true
-    local rowAngleDeg = 0
+    local autoRowAngle = autoRowAngle == nil or autoRowAngle
+    local rowAngleDeg = rowAngleDeg or 0
     local rowPattern = rowPattern or CourseGenerator.RowPattern.ALTERNATING
     local nRows = nRows or 1
     local leaveSkippedRowsUnworked = false
@@ -240,23 +252,23 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
 
     CourseGenerator.clearDebugObjects()
     local context = CourseGenerator.FieldworkContext(field, workingWidth, turningRadius, nHeadlandPasses)
-                :setHeadlandsWithRoundCorners(nHeadlandsWithRoundCorners)
-                :setHeadlandClockwise(headlandClockwise)
-                :setIslandHeadlandClockwise(islandHeadlandClockwise)
-                :setHeadlandFirst(headlandFirst)
-                :setIslandHeadlands(nIslandHeadlandPasses)
-                :setFieldCornerRadius(fieldCornerRadius)
-                :setBypassIslands(bypassIslands)
-                :setSharpenCorners(sharpenCorners)
-                :setAutoRowAngle(autoRowAngle)
-                :setRowAngle(math.rad(rowAngleDeg))
-                :setEvenRowDistribution(evenRowDistribution)
-                :setUseBaselineEdge(useBaselineEdge)
-                :setStartLocation(startX, startY)
-                :setBaselineEdge(baselineX, baselineY)
-                :setEnableSmallOverlapsWithHeadland(smallOverlaps)
-                :setFieldMargin(fieldMargin)
-                :setHeadlandOverlap(headlandOverlap)
+        :setHeadlandsWithRoundCorners(nHeadlandsWithRoundCorners)
+        :setHeadlandClockwise(headlandClockwise)
+        :setIslandHeadlandClockwise(islandHeadlandClockwise)
+        :setHeadlandFirst(headlandFirst)
+        :setIslandHeadlands(nIslandHeadlandPasses)
+        :setFieldCornerRadius(fieldCornerRadius)
+        :setBypassIslands(bypassIslands)
+        :setSharpenCorners(sharpenCorners)
+        :setAutoRowAngle(autoRowAngle)
+        :setRowAngle(math.rad(rowAngleDeg))
+        :setEvenRowDistribution(evenRowDistribution)
+        :setUseBaselineEdge(useBaselineEdge)
+        :setStartLocation(startX, startY)
+        :setBaselineEdge(baselineX, baselineY)
+        :setEnableSmallOverlapsWithHeadland(smallOverlaps)
+        :setFieldMargin(fieldMargin)
+        :setHeadlandOverlap(headlandOverlap)
 
     if rowPattern == CourseGenerator.RowPattern.SKIP then
         context:setRowPattern(CourseGenerator.RowPattern.create(rowPattern, nRows, leaveSkippedRowsUnworked))
@@ -278,11 +290,11 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     local course
     local errors = {}
     success, course = xpcall(
-            generatorFunc,
-            function(err)
-                context:addError(logger, debug.traceback(err))
-                error(nil)
-            end)
+        generatorFunc,
+        function(err)
+            context:addError(logger, debug.traceback(err))
+            error(nil)
+        end)
     if not success then
         io.stdout:flush()
         errors = context:getErrors()
@@ -293,7 +305,7 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     local islands = field:getIslands()
     local islandBoundaries = {}
     for _, i in ipairs(islands) do
-        table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
+        table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon()) -- i:getBoundary())
     end
     applyPathfinder(logger, path, islandBoundaries, turningRadius)
 
@@ -303,7 +315,6 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     segmentWork = false
     segmentType = "UNKNOWN"
     for i, v in course:getPath():vertices() do
-
         if v:getAttributes():isRowStart() then
             segmentWork = true
             segmentType = "ROW"
@@ -324,24 +335,24 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
             segmentType = "ROW_TURN"
         end
 
-        shouldCreateNewSegment = 
+        shouldCreateNewSegment =
             #output == 0 or
             output[#output].work ~= segmentWork or
             output[#output].type ~= segmentType
 
         if shouldCreateNewSegment then
-            table.insert(output,{
+            table.insert(output, {
                 work = segmentWork,
                 type = segmentType,
                 points = {}
             })
         end
 
-        table.insert(output[#output].points, {x = v.x, y = v.y})
+        table.insert(output[#output].points, { x = v.x, y = v.y })
 
         if debugTurnPaths[i] then
             for _, vt in ipairs(debugTurnPaths[i]) do
-                table.insert(output[#output].points, {x = vt.x, y = vt.y})
+                table.insert(output[#output].points, { x = vt.x, y = vt.y })
             end
         end
     end
