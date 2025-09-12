@@ -10,7 +10,14 @@ To work with the Löve wrapper, the Courseplay_FS25 repo needs to be cloned into
 git clone git@github.com:Courseplay/Courseplay_FS25.git FS25_Courseplay
 ```
 
-My idea now is to fork the CourseGenerator wrapper and modify it to suite our use case, hopefully it will not be neccissary to make changes to Courseplay_FS25...
+My idea now is to fork the CourseGenerator wrapper and modify it to suite our use case, hopefully it will not be necessary to make changes to Courseplay_FS25...
+
+Turns out we do need a few minor changes to Courseplay, I've put them in a git patch, do following to apply
+
+```bash
+cd CourseGenerator/FS25_Courseplay
+git apply ../courseplay.patch
+```
 
 ## Tips
 
@@ -18,9 +25,22 @@ Enable project search of the gitignored directory FS25_Courseplay do `CTRL+,` an
 
 Install Lua debugger for breakpoints and inspection: tomblind.local-lua-debugger-vscode
 
-Install Lua language server: sumneko.lua
+Install Lua language server extension: sumneko.lua
+
+Install lua interpeter: `sudo apt install lua5.2`
+
+Install Löve:
+
+```bash
+sudo add-apt-repository ppa:bartbes/love-stable
+sudo apt install love
+```
 
 Start Löve viewer: `love . fields/Goliszew.xml 13`
+
+This should output nothing: `lua generate.lua`
+
+
 
 # Original README from upstream repo
 

@@ -1,16 +1,16 @@
 
 -- Only generate path without love
 
--- package.path = package.path .. ";FS25_Courseplay/scripts/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/util/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/test/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/pathfinder/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/geometry/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Geometry/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/geometry/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Genetic/?.lua"
--- package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/genetic/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/util/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/test/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/pathfinder/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/geometry/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Geometry/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/geometry/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/Genetic/?.lua"
+package.path = package.path .. ";FS25_Courseplay/scripts/courseGenerator/genetic/?.lua"
 
 -- dofile('FS25_Courseplay/scripts/courseGenerator/test/require.lua')
 require('CpObject')
@@ -52,12 +52,8 @@ require('AnalyticHelper')
 require('Genetic')
 require('BlockSequencer')
 require('mock-Courseplay')
---------------------------------
 
-require('AdjustableParameter')
-require('ToggleParameter')
-require('ListParameter')
-require('Exporter')
+--------------------------------
 
 require('mocks.mock-GiantsEngine')
 require('mocks.mock-Node')
@@ -110,7 +106,7 @@ g_Courseplay = {
     }
 }
 
-local debugTurnPaths = {}
+debugTurnPaths = {}
 
 ---@class MyPathFinderConstraints : PathfinderConstraintInterface
 local MyPathFinderConstraints = CpObject(PathfinderConstraintInterface)
@@ -141,7 +137,7 @@ function MyPathFinderConstraints:getNodePenalty(node)
     return 0
 end
 
-local function doSomePathfinder(logger, i, vs, vg, islands, turningRadius)
+function doSomePathfinder(logger, i, vs, vg, islands, turningRadius)
     local start = vs:getEntryEdge():getEndAsState3D()
     local goal = vg:getExitEdge():getBaseAsState3D()
     local yieldAfter = 1000
@@ -157,7 +153,7 @@ local function doSomePathfinder(logger, i, vs, vg, islands, turningRadius)
     end
 end
 
-local function applyPathfinder(logger, p, islands, turningRadius)
+function applyPathfinder(logger, p, islands, turningRadius)
     debugTurnPaths = {}
     if #p > 1 then
         for i, v, vp, vn in p:vertices() do
@@ -274,42 +270,30 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
         return CourseGenerator.FieldworkCourse(context)
     end
 
-    local success
-    local course
-    local errors = {}
-    success, course = xpcall(
-            generatorFunc,
-            function(err)
-                context:addError(logger, debug.traceback(err))
-                error(nil)
-            end)
-    if not success then
-        io.stdout:flush()
-        errors = context:getErrors()
-        return
-    end
+    -- doit
+    local course, errors = generate_from_field_and_context(logger, field, context, generatorFunc)
 
-    local path = course:getPath();
-    local islands = field:getIslands()
-    local islandBoundaries = {}
-    for _, i in ipairs(islands) do
-        table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
+    if course == nil then
+        return nil, errors
     end
-    applyPathfinder(logger, path, islandBoundaries, turningRadius)
 
     -- Export the course
     output = {}
 
     segmentWork = false
     segmentType = "UNKNOWN"
+    prevHeadlandPassNum = nil
+
     for i, v in course:getPath():vertices() do
+
+        vHeadlandPassNum = v:getAttributes():getHeadlandPassNumber()
 
         if v:getAttributes():isRowStart() then
             segmentWork = true
             segmentType = "ROW"
         end
 
-        if v:getAttributes():getHeadlandPassNumber() then
+        if vHeadlandPassNum then
             segmentWork = true
             segmentType = "HEADLAND"
         end
@@ -327,7 +311,10 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
         shouldCreateNewSegment = 
             #output == 0 or
             output[#output].work ~= segmentWork or
-            output[#output].type ~= segmentType
+            output[#output].type ~= segmentType or
+            (segmentType == "HEADLAND" and prevHeadlandPassNum ~= vHeadlandPassNum)
+
+        prevHeadlandPassNum = vHeadlandPassNum
 
         if shouldCreateNewSegment then
             table.insert(output,{
@@ -346,9 +333,37 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
         end
     end
 
+    return output, errors
+end
+
+function generate_from_field_and_context(logger, field, context, generatorFunc)
+
+    local success
+    local course = nil
+    local errors = {}
+    success, course = xpcall(
+            generatorFunc,
+            function(err)
+                context:addError(logger, debug.traceback(err))
+                error(nil)
+            end)
+    if not success then
+        io.stdout:flush()
+        errors = context:getErrors()
+        return nil, errors
+    end
+
+    local path = course:getPath();
+    local islands = field:getIslands()
+    local islandBoundaries = {}
+    for _, i in ipairs(islands) do
+        table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
+    end
+    applyPathfinder(logger, path, islandBoundaries, context.turningRadius)
+
     -- make sure all logs are now visible
     io.stdout:flush()
     errors = context:getErrors()
 
-    return output, errors
+    return course, errors
 end
