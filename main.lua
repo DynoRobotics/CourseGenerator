@@ -10,6 +10,10 @@
 --
 --
 
+-------------------------------------------------------------------------------
+
+-- SETUP VSCODE DEBUGGER
+
 if os.getenv "LOCAL_LUA_DEBUGGER_VSCODE" == "1" then
     local lldebugger = require "lldebugger"
     lldebugger.start()
@@ -20,62 +24,24 @@ if os.getenv "LOCAL_LUA_DEBUGGER_VSCODE" == "1" then
     end
 end
 
-dofile( 'include.lua' )
-require('mocks.mock-GiantsEngine')
-require('mocks.mock-Node')
-require('mocks.mock-DebugUtil')
-require('mocks.mock-Courseplay')
-require('CpUtil')
-require('BinaryHeap')
-require('ReedsShepp')
-require('ReedsSheppSolver')
-require('Waypoint')
-require('Course')
-require('ai.util.AIUtil')
+-------------------------------------------------------------------------------
 
-function openIntervalTimer()
-end
+-- DEPENDENCIES
 
-function readIntervalTimerMs(timer)
-    return 0
-end
+dofile('generate.lua')
 
-function closeIntervalTimer(timer)
-end
+require('AdjustableParameter')
+require('ToggleParameter')
+require('ListParameter')
+require('Exporter')
 
-function printCallstack()
-    print(debug.traceback())
-end
+-------------------------------------------------------------------------------
 
-require('HybridAStar')
-require('AStar')
-require('HybridAStarWithAStarInTheMiddle')
-require('PathfinderConstraints')
+-- ADJUSTABLE PLANNER PARAMETERS
 
-g_Courseplay = {
-    globalSettings = {
-        getSettings = function()
-            return {
-                deltaAngleRelaxFactorDeg = {
-                    getValue = function()
-                        return 10
-                    end
-                },
-                maxDeltaAngleAtGoalDeg = {
-                    getValue = function()
-                        return 45
-                    end
-                },
-            }
-        end
-    }
-}
-
-local logger = Logger('main', Logger.level.debug)
 local parameters = {}
 
--- NOTE(erik): All field boundary settings seems to not really do anything,
--- I can not see any difference when changing these values. Investigate further...
+-- NOTE(erik): The settings related to the field boundary seems to not really do anything...
 
 -- 3.582m is the working with of the väderstad cultivator for Drever
 local workingWidth = AdjustableParameter(3.58, 'width', 'W', 'w', 0.1, 0, 100)
@@ -194,25 +160,43 @@ table.insert(parameters, nVehicles)
 local useSameTurnWidth = ToggleParameter('use same turn width', false, 'u')
 table.insert(parameters, useSameTurnWidth)
 
-local profilerEnabled = false
-local fileName = ''
-local dragging = false
+--------------------------------------------------------------------------------
+
+-- SETTINGS
+
+local PROFILER_ENABLED = false
+
+--------------------------------------------------------------------------------
+
+-- GLOBAL STATE
+
+local logger = Logger('main', Logger.level.debug)
+local mouseIsDragging = false
 local pointSize = 1
 local lineWidth = 0.1
 local scale = 1.0
 local windowWidth = 1400
 local windowHeight = 800
 local xOffset, yOffset = 0, 0
--- starting position
 local startX, startY, baselineX, baselineY = 1000, 0, 1000, 0
 
-local graphicsTransform, textTransform, statusTransform, mouseTransform, contextTransform, errorTransform
+local graphicsTransform, statusTransform, mouseTransform, contextTransform, errorTransform
 local startSign, stopSign
+
+local selectedField ---@type CourseGenerator.Field
+local course ---@type CourseGenerator.FieldworkCourse
+local savedFields
+local currentVertices
+local errors = {}
+local context
+
+--------------------------------------------------------------------------------
+
+-- COLORS
 
 local parameterNameColor = { 1, 1, 1 }
 local parameterKeyColor = { 0, 1, 1 }
 local parameterValueColor = { 1, 1, 0 }
-
 local startLocationColor = { 0.9, 0.9, 0.9 }
 local fieldBoundaryColor = { 0.5, 0.5, 0.5 }
 local courseColor = { 0, 0.7, 1 }
@@ -238,8 +222,6 @@ local connectingPathColor = { 0.3, 0.3, 0.3, 1 }
 local connectingPathFontColor = { 0.8, 0.8, 0.8, 1 }
 local swathColor = { 0, 0.7, 0, 0.25 }
 local islandColor = { 0.7, 0, 0.7, 1 }
-local islandPointColor = { 0.7, 0, 0.7, 0.4 }
-local islandPerimeterPointColor = { 1, 0.4, 1 }
 local multiVehicleColorForPosition = {}
 multiVehicleColorForPosition[-2] = { 1, 0, 0 }
 multiVehicleColorForPosition[-1] = { 1, 0.3, 0.3 }
@@ -247,91 +229,11 @@ multiVehicleColorForPosition[0] = courseColor
 multiVehicleColorForPosition[1] = { 0.3, 1, 0.3 }
 multiVehicleColorForPosition[2] = { 0, 1, 0 }
 
--- the selectedField to generate the course for
----@type CourseGenerator.Field
-local selectedField
--- the generated fieldwork course
----@type CourseGenerator.FieldworkCourse
-local course
-local savedFields
-local currentVertices
-local errors = {}
-local context
-
-local debugTurnPaths = {}
-
-
----@class MyPathFinderConstraints : PathfinderConstraintInterface
-local MyPathFinderConstraints = CpObject(PathfinderConstraintInterface)
-function MyPathFinderConstraints:init(islands)
-    self.islands = islands
-    self.penalty = 1
-end
-
-function MyPathFinderConstraints:isValidNode(node)
-    return true
-end
-
-function MyPathFinderConstraints:isValidAnalyticSolutionNode(node)
-    for _, b in ipairs(self.islands) do
-        if b:isInside(node.x, node.y) then
-            return false
-        end
-    end
-    return true
-end
-
-function MyPathFinderConstraints:getNodePenalty(node)
-    for _, b in ipairs(self.islands) do
-        if b:isInside(node.x, node.y) then
-            return self.penalty
-        end
-    end
-    return 0
-end
-
-local function doSomePathfinder(i, vs, vg, islands)
-    local start = vs:getEntryEdge():getEndAsState3D()
-    local goal = vg:getExitEdge():getBaseAsState3D()
-    local yieldAfter = 1000
-    local allowReverse = false
-    local constraints = MyPathFinderConstraints(islands)
-    local pathfinder = HybridAStarWithAStarInTheMiddle({}, yieldAfter)
-    local result = pathfinder:start(start, goal, turningRadius:get(), allowReverse, constraints)
-    local debugTurnPath = result.path
-    if result.done then
-        debugTurnPaths[i] = debugTurnPath
-    else
-        print("PATHFINDER FAILED")
-    end
-end
-
-local function applyPathfinder(p, islands)
-    debugTurnPaths = {}
-    if #p > 1 then
-        for i, v, vp, vn in p:vertices() do
-            if v:getExitEdge() then
-                if v:getAttributes():shouldUsePathfinderToNextWaypoint() then
-                    logger:debug("EXIT edge should use path finder to NEXT waypoint")
-                    doSomePathfinder(i, v, vn, islands)
-                elseif v:getAttributes():isRowEnd() then
-                    logger:debug("EXIT edge is ROW END")
-                    doSomePathfinder(i, v, vn, islands)
-                end
-            end
-            if v:getEntryEdge() and v:getAttributes():shouldUsePathfinderToThisWaypoint() then
-                -- love.graphics.line(v.x, v.y, v:getEntryEdge():getBase().x, v:getEntryEdge():getBase().y)
-                logger:debug("ENTRY ENGE should use path finder to THIS waypoint")
-                -- doSomePathfinder(i, vp, v, islands)
-            end
-        end
-    end
-end
 
 ------------------------------------------------------------------------------------------------------------------------
 --- Generate the fieldwork course
 ---------------------------------------------------------------------------------------------------------------------------
-local function generate()
+local function generate_fieldwork()
     Logger.setLogfile(string.format('log/%s.log', selectedField:getId()))
     CourseGenerator.clearDebugObjects()
     context = CourseGenerator.FieldworkContext(selectedField, workingWidth:get(), turningRadius:get(), nHeadlandPasses:get())
@@ -356,7 +258,7 @@ local function generate()
         context:setNumberOfVehicles(nVehicles:get())
         context:setUseSameTurnWidth(useSameTurnWidth:get())
     end
-    if profilerEnabled then
+    if PROFILER_ENABLED then
         love.profiler.start()
     end
     if rowPattern:get() == CourseGenerator.RowPattern.SKIP then
@@ -386,43 +288,30 @@ local function generate()
             return CourseGenerator.FieldworkCourse(context)
         end
     end
-    local success
-    success, course = xpcall(
-            generatorFunc,
-            function(err)
-                context:addError(logger, debug.traceback(err))
-                error(nil)
-            end)
-    if not success then
-        io.stdout:flush()
-        errors = context:getErrors()
-        return
-    end
+    
+    course, errors = generate_from_field_and_context(logger, selectedField, context, generatorFunc)
+
     if reverseCourse:get() then
-        course:reverse()
+        if course ~= nil then
+            course:reverse()
+        end
     end
-    if profilerEnabled then
+
+
+    if PROFILER_ENABLED then
         print(love.profiler.report(40))
         love.profiler.reset()
         love.profiler.stop()
     end
-    if nVehicles:get() > 1 then
-        -- for _, pos, path in course:pathIterator() do
-        -- end
-    else
-        local path = course:getPath();
-        local islands = selectedField:getIslands()
-        local islandBoundaries = {}
-        for _, i in ipairs(islands) do
-            table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
-        end
-        applyPathfinder(path, islandBoundaries)
-    end
+
     -- export the first headland as CSV
-    local exporter = Exporter(course)
-    exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
-    exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
-    exporter:exportCourseAndMetaDataAsCsv('courseAndMetaData.csv', debugTurnPaths)
+    if course ~= nil then
+        local exporter = Exporter(course)
+        exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
+        exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
+        exporter:exportCourseAndMetaDataAsCsv('courseAndMetaData.csv', debugTurnPaths)
+    end
+
     -- make sure all logs are now visible
     io.stdout:flush()
     errors = context:getErrors()
@@ -430,7 +319,6 @@ end
 
 local function updateTransform()
     graphicsTransform = love.math.newTransform(xOffset, yOffset, 0, 1, 1, 0, 0, 0, 0):scale(scale, -scale)
-    textTransform = love.math.newTransform(xOffset, yOffset, 0, 1, 1, 0, 0, 0, 0):scale(scale, scale)
 end
 
 --- Set offset so with the current scale, the world coordinates x, y are in the middle of the screen
@@ -440,10 +328,10 @@ local function setOffset(x, y)
 end
 
 function love.load(arg)
-    if profilerEnabled then
+    if PROFILER_ENABLED then
         love.profiler = require('profile')
     end
-    fileName = arg[1]
+    local fileName = arg[1]
     logger:debug('Reading %s...', fileName)
     savedFields = CourseGenerator.Field.loadSavedFields(fileName)
     selectedField = savedFields[tonumber(arg[2])]
@@ -485,7 +373,7 @@ function love.load(arg)
         stopSign = love.graphics.newImage('FS25_Courseplay/img/signs/stop.dds')
     end
 
-    generate()
+    generate_fieldwork()
 
     if not love.window then
         os.exit(0)
@@ -538,7 +426,7 @@ local function selectFieldUnderCursor()
             print(string.format('Field %s selected', f:getId()))
             selectedField = f
             love.window.setTitle(string.format('Course Generator - %s', selectedField:getId()))
-            generate()
+            generate_fieldwork()
         end
     end
 end
@@ -993,7 +881,7 @@ function love.textinput(key)
     end
     if key == ' ' or key == 'y' or key == 'Y' then
         -- regenerate when the number of vehicles changes
-        generate()
+        generate_fieldwork()
     end
 end
 
@@ -1011,24 +899,24 @@ end
 
 function love.mousepressed(x, y, button, istouch)
     if button == 1 then
-        dragging = true
+        mouseIsDragging = true
     end
 end
 
 function love.mousereleased(x, y, button, istouch)
     if button == 1 then
-        dragging = false
+        mouseIsDragging = false
     elseif button == 2 and not love.keyboard.isDown('lshift') then
         selectFieldUnderCursor()
     elseif button == 3 or (button == 2 and love.keyboard.isDown('lshift')) then
         x, y = love.mouse.getPosition()
         baselineX, baselineY = screenToWorld(x, y)
-        generate()
+        generate_fieldwork()
     end
 end
 
 function love.mousemoved(x, y, dx, dy)
-    if dragging then
+    if mouseIsDragging then
         xOffset = xOffset + dx
         yOffset = yOffset + dy
         updateTransform()
