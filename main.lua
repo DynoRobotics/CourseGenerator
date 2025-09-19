@@ -291,6 +291,12 @@ local function generate_fieldwork()
     
     course, errors = generate_from_field_and_context(logger, selectedField, context, generatorFunc)
 
+    logger:info('Generation completed with %d errors/warnings', #errors)
+
+    for i, err in ipairs(errors) do
+        logger:error('Error %d: %s', i, err)
+    end
+
     if reverseCourse:get() then
         if course ~= nil then
             course:reverse()
@@ -306,15 +312,9 @@ local function generate_fieldwork()
 
     -- export the first headland as CSV
     if course ~= nil then
-        local exporter = Exporter(course)
-        exporter:exportHeadlandAsCsv(1, 'headland-1.csv')
-        exporter:exportCourseAsCsv('course.csv', debugTurnPaths)
-        exporter:exportCourseAndMetaDataAsCsv('courseAndMetaData.csv', debugTurnPaths)
+        local segments = export_segments(course)
+        print(segments)
     end
-
-    -- make sure all logs are now visible
-    io.stdout:flush()
-    errors = context:getErrors()
 end
 
 local function updateTransform()
@@ -402,7 +402,7 @@ end
 
 local function findCurrentVertices(sx, sy)
     local x, y = screenToWorld(sx, sy)
-    if course and not context:hasErrors() then
+    if course then -- and not context:hasErrors() then
         local vertices = {}
         for _, pos, path in course:pathIterator() do
             for _, v in path:vertices() do
@@ -751,7 +751,7 @@ local function drawGraphics()
     love.graphics.replaceTransform(graphicsTransform)
     love.graphics.setPointSize(pointSize)
     drawFields()
-    if course and not context:hasErrors() then
+    if course then -- and not context:hasErrors() then
         drawHeadlands()
         if course:getCenter() then
             drawCenter(course:getCenter())

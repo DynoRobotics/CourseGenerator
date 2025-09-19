@@ -109,16 +109,20 @@ debugTurnPaths = {}
 
 ---@class MyPathFinderConstraints : PathfinderConstraintInterface
 local MyPathFinderConstraints = CpObject(PathfinderConstraintInterface)
-function MyPathFinderConstraints:init(islands)
+function MyPathFinderConstraints:init(islands, boundary)
     self.islands = islands
+    self.boundary = boundary
     self.penalty = 1
 end
 
 function MyPathFinderConstraints:isValidNode(node)
-    return true
+    return self:isValidAnalyticSolutionNode(node)
 end
 
 function MyPathFinderConstraints:isValidAnalyticSolutionNode(node)
+    if not self.boundary:isInside(node.x, node.y) then
+        return false
+    end
     for _, b in ipairs(self.islands) do
         if b:isInside(node.x, node.y) then
             return false
@@ -128,6 +132,9 @@ function MyPathFinderConstraints:isValidAnalyticSolutionNode(node)
 end
 
 function MyPathFinderConstraints:getNodePenalty(node)
+    if not self.boundary:isInside(node.x, node.y) then
+        return self.penalty
+    end
     for _, b in ipairs(self.islands) do
         if b:isInside(node.x, node.y) then
             return self.penalty
@@ -136,39 +143,43 @@ function MyPathFinderConstraints:getNodePenalty(node)
     return 0
 end
 
-function doSomePathfinder(logger, i, vs, vg, islands, turningRadius)
+function doSomePathfinder(logger, i, vs, vg, islands, boundary, context)
     local start = vs:getEntryEdge():getEndAsState3D()
     local goal = vg:getExitEdge():getBaseAsState3D()
     local yieldAfter = 1000
     local allowReverse = false
-    local constraints = MyPathFinderConstraints(islands)
+    local constraints = MyPathFinderConstraints(islands, boundary)
     local pathfinder = HybridAStarWithAStarInTheMiddle({}, yieldAfter)
-    local result = pathfinder:start(start, goal, turningRadius, allowReverse, constraints)
-    local debugTurnPath = result.path
-    if result.done then
-        debugTurnPaths[i] = debugTurnPath
+    local result = pathfinder:start(start, goal, context.turningRadius, allowReverse, constraints)
+    while not result.done do
+        logger:debug("PATHFINDER YIELD")
+        result = pathfinder:resume()
+    end
+    if result.path then
+        logger:debug("PATHFINDER DONE with path length " .. #result.path)
+        debugTurnPaths[i] = result.path
     else
-        logger:debug("PATHFINDER FAILED")
+        context:addError(logger, "PATHFINDER DONE without path")
     end
 end
 
-function applyPathfinder(logger, p, islands, turningRadius)
+function applyPathfinder(logger, p, islands, boundary, context)
     debugTurnPaths = {}
     if #p > 1 then
         for i, v, vp, vn in p:vertices() do
             if v:getExitEdge() then
                 if v:getAttributes():shouldUsePathfinderToNextWaypoint() then
                     logger:debug("EXIT edge should use path finder to NEXT waypoint")
-                    doSomePathfinder(logger, i, v, vn, islands, turningRadius)
+                    doSomePathfinder(logger, i, v, vn, islands, boundary, context)
                 elseif v:getAttributes():isRowEnd() then
                     logger:debug("EXIT edge is ROW END")
-                    doSomePathfinder(logger, i, v, vn, islands, turningRadius)
+                    doSomePathfinder(logger, i, v, vn, islands, boundary, context)
                 end
             end
             if v:getEntryEdge() and v:getAttributes():shouldUsePathfinderToThisWaypoint() then
                 -- love.graphics.line(v.x, v.y, v:getEntryEdge():getBase().x, v:getEntryEdge():getBase().y)
                 logger:debug("ENTRY ENGE should use path finder to THIS waypoint")
-                -- doSomePathfinder(i, vp, v, islands)
+                -- doSomePathfinder(i, vp, v, islands, boundary, context)
             end
         end
     end
@@ -186,19 +197,20 @@ function makeFieldFromGeometry(fieldXY, logger)
         local x, z = p[1], p[2]
         field.boundary:append(Vertex(x, -z))
     end
+    field.boundary:splitEdges(CourseGenerator.cMaxEdgeLength)
 
     -- islands
-    field.islandPoints = {}
     for _, obstacle in ipairs(fieldXY.obstacles) do
+        perimiter = Polygon()
         for i, p in ipairs(obstacle) do
             local x, z = p[1], p[2]
-            table.insert(field.islandPoints, Vertex(x, -z))
+            perimiter:append(Vertex(x, -z))
         end
+        local islandId = #field:getIslands() + 1
+        local island = CourseGenerator.Island.createFromBoundary(islandId, perimiter)
+        field:addIsland(island)
+        logger:debug("Added island %d with area %.0f", islandId, island.boundary:getArea())
     end
-
-    field.boundary:splitEdges(CourseGenerator.cMaxEdgeLength)
-    field.boundary:calculateProperties()
-    field:setupIslands()
 
     return field
 end
@@ -290,7 +302,18 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
     end
 
     -- Export the course
-    output = {}
+    local output = export_segments(course)
+
+    local result = {
+        segments = output,
+        errors = errors,
+    };
+
+    return result
+end
+
+function export_segments(course)
+    local output = {}
 
     segmentWork = false
     segmentType = "UNKNOWN"
@@ -345,14 +368,13 @@ function generate(fieldXY, workingWidth, nHeadlandPasses, headlandFirst, headlan
         end
     end
 
-    return output, errors
+    return output
 end
 
 function generate_from_field_and_context(logger, field, context, generatorFunc)
 
     local success
     local course = nil
-    local errors = {}
     success, course = xpcall(
             generatorFunc,
             function(err)
@@ -361,21 +383,20 @@ function generate_from_field_and_context(logger, field, context, generatorFunc)
             end)
     if not success then
         io.stdout:flush()
-        errors = context:getErrors()
-        return nil, errors
+        return nil, context:getErrors()
     end
 
     local path = course:getPath();
+    local fieldBoundary = field:getBoundary()
     local islands = field:getIslands()
     local islandBoundaries = {}
-    for _, i in ipairs(islands) do
-        table.insert(islandBoundaries, i:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
+    for _, island in ipairs(islands) do
+        table.insert(islandBoundaries, island:getHeadlands()[1]:getPolygon())  -- i:getBoundary())
     end
-    applyPathfinder(logger, path, islandBoundaries, context.turningRadius)
+    applyPathfinder(logger, path, islandBoundaries, fieldBoundary, context)
 
     -- make sure all logs are now visible
     io.stdout:flush()
-    errors = context:getErrors()
 
-    return course, errors
+    return course, context:getErrors()
 end
