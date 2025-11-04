@@ -326,21 +326,29 @@ function export_segments(course)
         if v:getAttributes():isRowStart() then
             segmentWork = true
             segmentType = "ROW"
+            segmentWorkedLeft = v:getAttributes():isLeftSideWorked()
+            segmentWorkedRight = v:getAttributes():isRightSideWorked()
         end
 
         if vHeadlandPassNum then
             segmentWork = true
             segmentType = "HEADLAND"
+            segmentWorkedLeft = false
+            segmentWorkedRight = false
         end
 
         if v:getAttributes():isOnConnectingPath() then
             segmentWork = false
             segmentType = "CONNECTING_PATH"
+            segmentWorkedLeft = false
+            segmentWorkedRight = false
         end
 
         if debugTurnPaths[i] then
             segmentWork = false
             segmentType = "ROW_TURN"
+            segmentWorkedLeft = false
+            segmentWorkedRight = false
         end
 
         shouldCreateNewSegment =
@@ -355,6 +363,8 @@ function export_segments(course)
             table.insert(output, {
                 work = segmentWork,
                 type = segmentType,
+                workedLeft = segmentWorkedLeft,
+                workedRight = segmentWorkedRight,
                 points = {}
             })
         end

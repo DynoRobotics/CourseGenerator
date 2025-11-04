@@ -313,7 +313,10 @@ local function generate_fieldwork()
     -- export the first headland as CSV
     if course ~= nil then
         local segments = export_segments(course)
-        print(segments)
+        for i, seg in ipairs(segments) do
+            print("Segment " .. i, "work=" .. tostring(seg.work), "type=" .. seg.type, "workedLeft=" .. tostring(seg.workedLeft), "workedRight=" .. tostring(seg.workedRight), "nPoints=" .. #seg.points)
+        end
+
     end
 end
 
