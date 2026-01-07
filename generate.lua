@@ -371,6 +371,17 @@ function export_segments(course)
 
         table.insert(output[#output].points, { x = v.x, y = v.y })
 
+        -- Fixes issues with row edges being put in the wrong segment
+        if shouldCreateNewSegment
+           and segmentType == "ROW_TURN"
+           and #output >= 2 then
+
+            local curr = output[#output]
+            local prev = output[#output - 1]
+
+            table.insert(prev.points, table.remove(curr.points))
+        end
+
         if debugTurnPaths[i] then
             for _, vt in ipairs(debugTurnPaths[i]) do
                 table.insert(output[#output].points, { x = vt.x, y = vt.y })
